@@ -1,11 +1,17 @@
 /* Ecomondo 2026 — carnet de salon. Données sur l'appareil (IndexedDB). */
 (() => {
 'use strict';
-const APP_VERSION = '1.0.0';
-const DAYS = { mar: 'Mardi', mer: 'Mercredi', jeu: 'Jeudi' };
-const DAY_DATES = { mar: '3 nov.', mer: '4 nov.', jeu: '5 nov.' };
-const DAY_ORDER = { mar: 1, mer: 2, jeu: 3 };
+const APP_VERSION = '1.1.0';
+const DEFAULT_SHOW = { name: 'Ecomondo 2026', place: 'Rimini', days: [{ key: 'mar', label: 'Mardi', date: '3 nov.', iso: '2026-11-03' }, { key: 'mer', label: 'Mercredi', date: '4 nov.', iso: '2026-11-04' }, { key: 'jeu', label: 'Jeudi', date: '5 nov.', iso: '2026-11-05' }] };
+const DAYS = {}, DAY_DATES = {}, DAY_ORDER = {}, DAY_ISO = {};
+function applyShow(show) {
+  const s = show && show.days && show.days.length ? show : DEFAULT_SHOW;
+  for (const o of [DAYS, DAY_DATES, DAY_ORDER, DAY_ISO]) for (const k of Object.keys(o)) delete o[k];
+  s.days.forEach((d, i) => { DAYS[d.key] = d.label; DAY_DATES[d.key] = d.date || ''; DAY_ORDER[d.key] = i + 1; if (d.iso) DAY_ISO[d.iso] = d.key; });
+  return s;
+}
 const dayCmp = (a, b) => (DAY_ORDER[a.day] || 9) - (DAY_ORDER[b.day] || 9);
+const firstDay = () => Object.keys(DAYS)[0] || 'j1';
 const KIND_LABEL = { rdv: 'RDV', visite: 'Visite', ajout: 'Ajout', reserve: 'Réserve', delegation: 'Délégation' };
 const COUNTRIES = { IT:'Italie', DE:'Allemagne', CN:'Chine', AT:'Autriche', ES:'Espagne', CH:'Suisse', FR:'France', DK:'Danemark', BE:'Belgique', NL:'Pays-Bas', CZ:'Tchéquie', TR:'Turquie', GB:'Royaume-Uni', CL:'Chili', NO:'Norvège', SE:'Suède', FI:'Finlande', PL:'Pologne', PT:'Portugal', US:'États-Unis', CA:'Canada', GR:'Grèce', HU:'Hongrie', SI:'Slovénie', SK:'Slovaquie', RO:'Roumanie', BG:'Bulgarie', HR:'Croatie', IE:'Irlande', LU:'Luxembourg', LT:'Lituanie', LV:'Lettonie', EE:'Estonie', UA:'Ukraine', RS:'Serbie', IN:'Inde', JP:'Japon', KR:'Corée du Sud', TW:'Taïwan', IL:'Israël', AE:'Émirats arabes unis', EG:'Égypte', MA:'Maroc', TN:'Tunisie', DZ:'Algérie', ZA:'Afrique du Sud', BR:'Brésil', MX:'Mexique', AR:'Argentine', AU:'Australie', SM:'Saint-Marin', MT:'Malte', CY:'Chypre', IS:'Islande', GE:'Géorgie', KZ:'Kazakhstan', SA:'Arabie saoudite', NG:'Nigéria', KE:'Kenya', GH:'Ghana', ET:'Éthiopie', MY:'Malaisie', SG:'Singapour', TH:'Thaïlande', VN:'Vietnam', ID:'Indonésie', PK:'Pakistan', LB:'Liban', JO:'Jordanie', IR:'Iran', IQ:'Irak', QA:'Qatar', KW:'Koweït', OM:'Oman', BH:'Bahreïn', AL:'Albanie', MK:'Macédoine du Nord', BA:'Bosnie-Herzégovine', ME:'Monténégro', XK:'Kosovo', MD:'Moldavie', BY:'Biélorussie', RU:'Russie', LI:'Liechtenstein', MC:'Monaco', AD:'Andorre', CO:'Colombie', PE:'Pérou', UY:'Uruguay', EC:'Équateur', VE:'Venezuela', CR:'Costa Rica', PA:'Panama', DO:'République dominicaine', NZ:'Nouvelle-Zélande', HK:'Hong Kong', PH:'Philippines', BD:'Bangladesh', LK:'Sri Lanka', UZ:'Ouzbékistan', AZ:'Azerbaïdjan', AM:'Arménie', SN:'Sénégal', CI:"Côte d'Ivoire", CM:'Cameroun', TZ:'Tanzanie', UG:'Ouganda', RW:'Rwanda', MZ:'Mozambique', AO:'Angola', ZM:'Zambie', ZW:'Zimbabwe', LY:'Libye', SD:'Soudan', MU:'Maurice' };
 const INFO_BLOCKS = [
@@ -31,7 +37,7 @@ const fmtDate = iso => { if (!iso) return ''; const d = new Date(iso); return is
 const country = c => COUNTRIES[c] || c || '';
 const norm = s => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\b(SRL|SPA|GMBH|LTD|LLC|INC|SAS|SA|BV|AG|AB|SRO|SL|SNC|CO|KG|CORP|SOCIETA|UNIPERSONALE|GROUP|GRUPPO|INTERNATIONAL)\b/g, ' ').replace(/\s+/g, ' ').trim();
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
-const todayKey = () => { const d = new Date(); const k = { '2026-11-03': 'mar', '2026-11-04': 'mer', '2026-11-05': 'jeu' }; const s = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return k[s] || null; };
+const todayKey = () => { const d = new Date(); const s = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return DAY_ISO[s] || null; };
 const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 function toast(msg, ms = 2200) { const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), ms); }
 function confirm2(msg) { return window.confirm(msg); }
@@ -61,24 +67,24 @@ const dbClear = store => tx(store, 'readwrite', s => s.clear());
 const setting = (k, v) => { try { if (v === undefined) return localStorage.getItem('eco:' + k); localStorage.setItem('eco:' + k, v); } catch (e) { return null; } };
 
 /* ---------- état ---------- */
-const S = { items: [], contacts: [], reserve: [], cat: null, catIndex: null, ready: false, view: null, day: setting('day') || todayKey() || 'mar', q: '', saveTimers: {}, urls: new Map(), expoFilter: { hall: '', reserveOnly: true } };
+const S = { items: [], contacts: [], reserve: [], show: DEFAULT_SHOW, cat: null, catIndex: null, ready: false, view: null, day: '', q: '', saveTimers: {}, urls: new Map(), expoFilter: { hall: '', reserveOnly: true } };
 const byId = (arr, id) => arr.find(x => x.id === id);
 function newItem(o) {
   return Object.assign({ id: uid(), kind: 'ajout', day: S.day, order: 999, time: '', stand: '', hall: '', company: '', country: '', contactPlanned: '', what: '', objective: '', priority: '', angle: '', duration: '', status: 'todo', doneAt: '', rating: '', intAgent: false, intMay: false, intQuad: false, inCanada: '', fixOk: '', nextStep: '', nextDate: '', notes: '', exhibitorId: '', createdAt: nowIso(), updatedAt: nowIso() }, o);
 }
-async function seedIfNeeded() {
-  const meta = await dbGet('meta', 'seed');
-  const r = await fetch('data/seed.json'); const seed = await r.json();
-  S.reserve = seed.reserve;
-  if (!meta) {
-    for (const it of seed.items) await dbPut('items', newItem(Object.assign({}, it, { status: 'todo' })));
-    await dbPut('meta', { k: 'seed', version: seed.version, at: nowIso() });
-  }
+async function loadShow() {
+  const show = await dbGet('meta', 'show'); S.show = applyShow(show ? show.value : null);
+  const res = await dbGet('meta', 'reserve'); S.reserve = res && Array.isArray(res.value) ? res.value : [];
+  const saved = setting('day'); S.day = (saved && DAYS[saved]) ? saved : (todayKey() || firstDay());
 }
 async function loadAll() { S.items = await dbAll('items'); S.contacts = await dbAll('contacts'); }
 async function loadCatalogue() {
   if (S.cat) return S.cat;
-  const r = await fetch('data/catalogue.json'); const c = await r.json();
+  let c = null;
+  const own = await dbGet('meta', 'catalogue').catch(() => null);
+  if (own && own.value && own.value.exhibitors) c = own.value;
+  else { try { const r = await fetch('data/catalogue.json'); if (r.ok) c = await r.json(); } catch (e) { c = null; } }
+  if (!c) c = { sectors: {}, exhibitors: [] };
   S.cat = c; S.catIndex = c.exhibitors.map(e => ({ e, n: norm(e.n), toks: norm(e.n).split(' ').filter(t => t.length > 1) }));
   S.catById = new Map(c.exhibitors.map(e => [e.id, e]));
   S.df = new Map(); for (const x of S.catIndex) for (const t of new Set(x.toks)) S.df.set(t, (S.df.get(t) || 0) + 1);
@@ -165,16 +171,18 @@ views.plan = { search: true, render(day) {
   const isToday = todayKey() === S.day; const nm = nowMin();
   let nextId = null; if (isToday) { const nx = all.find(i => i.status === 'todo' && timeMin(i.time) !== null && timeMin(i.time) >= nm - 10); nextId = nx ? nx.id : null; }
   if (!nextId) { const nx = all.find(i => i.status === 'todo'); nextId = nx ? nx.id : null; }
-  setTitle(`${DAYS[S.day]} ${DAY_DATES[S.day]}`, `${done} fait${done > 1 ? 's' : ''} sur ${all.length}${skipped ? ` · ${skipped} sauté${skipped > 1 ? 's' : ''}` : ''}`);
+  setTitle(`${DAYS[S.day] || 'Plan'} ${DAY_DATES[S.day] || ''}`.trim(), `${done} fait${done > 1 ? 's' : ''} sur ${all.length}${skipped ? ` · ${skipped} sauté${skipped > 1 ? 's' : ''}` : ''}`);
   const seg = `<div class="seg days">${Object.keys(DAYS).map(k => `<button class="${k === S.day ? 'on' : ''}" data-day="${k}">${DAYS[k].slice(0, 3)}.<br><span style="font-weight:500;font-size:12px">${DAY_DATES[k]}</span></button>`).join('')}</div>`;
   const pct = all.length ? Math.round(100 * (done + skipped) / all.length) : 0;
   const prog = `<div class="card"><div class="pad"><div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-bottom:6px"><span>Progression</span><span>${pct} %</span></div><div class="progress"><div style="width:${pct}%"></div></div></div></div>`;
   const banner = installBanner();
-  const rows = list.length ? list.map(it => itemRow(it, { next: it.id === nextId })).join('') : `<div class="empty">${S.q ? 'Aucun résultat.' : 'Rien de prévu ce jour. Ajoute un stand avec le bouton +.'}</div>`;
+  const noPlan = !S.items.length;
+  const rows = noPlan ? `<div class="empty"><b>Aucun plan chargé.</b><br><span class="hint">Importe le fichier de plan (JSON ou Excel) reçu pour ce salon, ou ajoute des stands avec le bouton +.</span><br><br><button class="btn" id="importPlanBtn">Importer un plan</button></div>` : list.length ? list.map(it => itemRow(it, { next: it.id === nextId })).join('') : `<div class="empty">${S.q ? 'Aucun résultat.' : 'Rien de prévu ce jour. Ajoute un stand avec le bouton +.'}</div>`;
   main.innerHTML = banner + seg + prog + `<div class="card" id="list">${rows}</div><button class="fab" id="fab" aria-label="Ajouter un stand"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>`;
   $$('[data-day]', main).forEach(b => b.addEventListener('click', () => go('plan/' + b.dataset.day)));
   bindRows($('#list'));
   $('#fab').addEventListener('click', () => go('add'));
+  const ip = $('#importPlanBtn'); if (ip) ip.addEventListener('click', () => $('#planIn').click());
   bindBanner();
 } };
 function installBanner() {
@@ -207,7 +215,7 @@ views.expo = { search: true, async render() {
   const halls = ['A1','A2','A3','A4','A5','A6','A7','B1','B2','B3','B4','B5','B6','B7','B8','C1','C2','C3','C4','C5','C6','C7','D1','D2','D3','D4','D5','D6','D7','D8','Hall SUD'];
   const f = S.expoFilter; const q = S.q;
   const inPlan = new Map(S.items.filter(i => i.exhibitorId).map(i => [i.exhibitorId, i]));
-  const resById = new Map(S.reserve.map(r => [r.exhibitorId, r]));
+  const resById = new Map(S.reserve.map(r => [r.exhibitorId || r.id, r]));
   let rows = '';
   let list;
   if (q) {
@@ -216,7 +224,7 @@ views.expo = { search: true, async render() {
     if (f.hall) list = list.filter(e => e.h === f.hall);
     list = list.slice(0, 150);
   } else if (f.reserveOnly) {
-    list = S.reserve.filter(r => !f.hall || r.hall === f.hall).sort((a, b) => (a.priority || '9').localeCompare(b.priority || '9') || a.hall.localeCompare(b.hall)).map(r => S.catById.get(r.exhibitorId)).filter(Boolean);
+    list = S.reserve.filter(r => !f.hall || r.hall === f.hall).sort((a, b) => (a.priority || '9').localeCompare(b.priority || '9') || (a.hall || '').localeCompare(b.hall || '')).map(r => S.catById.get(r.exhibitorId) || { id: r.id, n: r.company, s: r.stand, h: r.hall, c: r.country, ps: r.what, sec: [], fromReserve: true });
   } else {
     list = S.cat.exhibitors.filter(e => (!f.hall || e.h === f.hall) && e.k !== 'represented').sort((a, b) => a.n.localeCompare(b.n)).slice(0, 400);
   }
@@ -232,8 +240,10 @@ views.expo = { search: true, async render() {
 
 views.exhibitor = { back: true, tab: 'expo', async render(id) {
   await loadCatalogue();
-  const e = S.catById.get(id); if (!e) { $('#main').innerHTML = '<div class="empty">Exposant introuvable.</div>'; return; }
-  const r = S.reserve.find(x => x.exhibitorId === id); const planned = S.items.filter(i => i.exhibitorId === id);
+  let e = S.catById.get(id); const r = S.reserve.find(x => x.exhibitorId === id || x.id === id);
+  if (!e && r) e = { id: r.id, n: r.company, s: r.stand, h: r.hall, c: r.country, ps: r.what, sec: [], fromReserve: true };
+  if (!e) { $('#main').innerHTML = '<div class="empty">Exposant introuvable.</div>'; setTitle('Exposant'); return; }
+  const planned = S.items.filter(i => i.exhibitorId === id || (r && i.exhibitorId === r.exhibitorId && r.exhibitorId));
   setTitle(e.n, [e.s, country(e.c)].filter(Boolean).join(' · '));
   const sectors = (e.sec || []).map(c => S.cat.sectors[c] || c);
   const html = `<div class="hero"><h2>${esc(e.n)}</h2><div class="meta">${e.s ? `<span>Stand <b>${esc(e.s)}</b></span>` : ''}${e.c ? `<span>${esc(country(e.c))}</span>` : ''}${e.k === 'represented' ? '<span class="chip">Représentée</span>' : ''}</div>
@@ -246,7 +256,7 @@ views.exhibitor = { back: true, tab: 'expo', async render(id) {
   $('#main').innerHTML = html;
   if (planned.length) bindRows($('#list'));
   $$('[data-add]', $('#main')).forEach(b => b.addEventListener('click', async () => {
-    const it = newItem({ kind: 'ajout', userAdded: true, day: b.dataset.add, order: 900 + S.items.length, company: e.n, stand: e.s, hall: e.h, country: e.c, exhibitorId: e.id, what: e.ps || '', objective: r ? r.objective : '', priority: r ? r.priority : '', angle: r ? r.angle : '' });
+    const it = newItem({ kind: 'ajout', userAdded: true, day: b.dataset.add, order: 900 + S.items.length, company: e.n, stand: e.s, hall: e.h, country: e.c, exhibitorId: e.fromReserve ? '' : e.id, what: e.ps || '', objective: r ? r.objective : '', priority: r ? r.priority : '', angle: r ? r.angle : '' });
     await dbPut('items', it); S.items.push(it); toast(`Ajouté à ${DAYS[it.day].toLowerCase()}`); go('item/' + it.id);
   }));
 } };
@@ -425,12 +435,20 @@ views.settings = { back: true, noTabs: true, render() {
     <div class="field"><label>Modèle</label><input id="aiModel" value="${esc(model)}" autocapitalize="off"></div>
     <div class="pad"><button class="btn secondary" id="warm">Préparer la lecture hors ligne (télécharge le moteur, ~15 Mo)</button><div class="hint mt" id="warmStatus"></div></div>
   </div>
-  <div class="section-title">Données</div>
+  <div class="section-title">Salon et plan</div>
   <div class="card"><div class="pad" style="display:grid;gap:10px">
-    <button class="btn secondary" id="exp">Exporter la sauvegarde (JSON)</button>
-    <button class="btn secondary" id="imp">Importer une sauvegarde</button>
+    <div class="hint"><b style="color:var(--text)">${esc(S.show.name)}</b>${S.show.place ? ' · ' + esc(S.show.place) : ''} · ${S.show.days.map(d => esc(d.label + (d.date ? ' ' + d.date : ''))).join(', ')}<br>${S.items.length} fiches, ${S.reserve.length} en réserve${S.cat ? ', catalogue de ' + S.cat.exhibitors.length + ' exposants' : ''}</div>
+    <button class="btn" id="impPlan">Importer un plan (JSON ou Excel)</button>
+    <button class="btn secondary" id="tpl">Télécharger le modèle Excel de plan</button>
+    <button class="btn secondary" id="impCat">Importer un catalogue d’exposants (Excel ou CSV)</button>
+    <div class="hint">Le plan reste sur cet appareil. Un plan importé une deuxième fois met à jour les stands et horaires sans toucher aux notes, contacts et photos. Pour un nouveau salon : exporter la sauvegarde, puis « Nouveau salon ».</div>
+    <button class="btn danger" id="newShow">Nouveau salon (efface fiches, contacts, photos)</button>
+  </div></div>
+  <div class="section-title">Sauvegarde</div>
+  <div class="card"><div class="pad" style="display:grid;gap:10px">
+    <button class="btn secondary" id="exp">Exporter la sauvegarde (JSON avec photos)</button>
+    <button class="btn secondary" id="imp">Restaurer une sauvegarde</button>
     <div class="hint" id="storageInfo">…</div>
-    <button class="btn danger" id="reset">Réinitialiser au plan initial (efface tout)</button>
   </div></div>
   <div class="section-title">Application</div>
   <div class="card"><div class="pad" style="display:grid;gap:10px">
@@ -442,22 +460,115 @@ views.settings = { back: true, noTabs: true, render() {
   $('#warm').addEventListener('click', async () => { const st = $('#warmStatus'); st.textContent = 'Téléchargement…'; try { await getOcrWorker(p => { st.textContent = p; }); st.textContent = 'Moteur prêt. La lecture fonctionne hors ligne.'; } catch (e) { st.textContent = 'Échec : ' + e.message; } });
   $('#exp').addEventListener('click', exportBackup);
   $('#imp').addEventListener('click', () => $('#jsonIn').click());
-  $('#reset').addEventListener('click', async () => { if (!confirm2('Tout effacer : fiches, notes, contacts, photos. Continuer ?')) return; if (!confirm2('Dernière confirmation : effacer toutes les données ?')) return; for (const s of ['items', 'contacts', 'photos', 'meta']) await dbClear(s); S.urls.clear(); await seedIfNeeded(); await loadAll(); toast('Plan réinitialisé'); go('plan/' + S.day); });
+  $('#impPlan').addEventListener('click', () => $('#planIn').click());
+  $('#impCat').addEventListener('click', () => $('#catIn').click());
+  $('#tpl').addEventListener('click', exportTemplate);
+  $('#newShow').addEventListener('click', async () => { if (!confirm2('Nouveau salon : efface toutes les fiches, notes, contacts et photos de cet appareil. As-tu exporté la sauvegarde ?')) return; if (!confirm2('Dernière confirmation : tout effacer ?')) return; for (const s of ['items', 'contacts', 'photos', 'meta']) await dbClear(s); S.urls.clear(); S.cat = null; await loadShow(); await loadAll(); toast('Prêt pour un nouveau salon'); go('plan/' + S.day); });
   $('#reload').addEventListener('click', () => location.reload());
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => { const el = $('#storageInfo'); if (el) el.textContent = `${S.items.length} fiches, ${S.contacts.length} contacts, ${S.contacts.filter(c => c.photoId).length} photos · ${(e.usage / 1048576).toFixed(1)} Mo utilisés`; }).catch(() => {});
 } };
 $('#jsonIn').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try { const data = JSON.parse(await f.text()); if (!data.items) throw new Error('format');
-    if (!confirm2(`Importer ${data.items.length} fiches, ${(data.contacts || []).length} contacts et ${(data.photos || []).length} photos ? Les données actuelles seront remplacées.`)) return;
-    for (const s of ['items', 'contacts', 'photos']) await dbClear(s);
-    for (const it of data.items) await dbPut('items', it);
-    for (const c of data.contacts || []) await dbPut('contacts', c);
-    for (const p of data.photos || []) { const bin = atob(p.data); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); await dbPut('photos', { id: p.id, type: p.type, data: arr.buffer, createdAt: p.createdAt }); }
-    await dbPut('meta', { k: 'seed', version: data.version || 1, at: nowIso() });
-    S.urls.clear(); await loadAll(); toast('Sauvegarde importée'); go('plan/' + S.day);
+    if (!confirm2(`Restaurer ${data.items.length} fiches, ${(data.contacts || []).length} contacts et ${(data.photos || []).length} photos ? Les données actuelles seront remplacées.`)) return;
+    await restoreBackup(data);
   } catch (err) { toast('Fichier invalide'); console.error(err); }
 });
+
+/* ---------- import de plan / catalogue ---------- */
+const slug = s => norm(s).toLowerCase().replace(/\s+/g, '-').replace(/^-|-$/g, '');
+const H = (row, ...names) => { for (const n of names) { const k = Object.keys(row).find(k => norm(k) === norm(n)); if (k !== undefined && row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') return String(row[k]).trim(); } return ''; };
+function excelDate(v) { if (v instanceof Date) return v; const s = String(v || '').trim(); let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); if (m) return new Date(+m[1], +m[2] - 1, +m[3]); m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/.exec(s); if (m) return new Date(+m[3], +m[2] - 1, +m[1]); if (/^\d{5}$/.test(s)) return new Date(Math.round((+s - 25569) * 86400 * 1000)); return null; }
+function isoOf(d) { return d ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') : ''; }
+function fmtDay(d) { return d ? d.toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' }) : ''; }
+function timeStr(v) { if (v instanceof Date) return String(v.getHours()).padStart(2, '0') + ':' + String(v.getMinutes()).padStart(2, '0'); const s = String(v || '').trim(); if (/^\d*\.\d+$/.test(s) || /^0\.\d+$/.test(s)) { const t = Math.round(parseFloat(s) * 1440); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); } const m = /^(\d{1,2})\s*[:hH.]\s*(\d{2})?/.exec(s); return m ? m[1] + ':' + (m[2] || '00') : s; }
+function rowsToPlan(rows, showRows) {
+  const kindOf = t => { const n = norm(t); if (/RESERV/.test(n)) return 'reserve'; if (/DELEG|SOIR|RESEAU/.test(n)) return 'delegation'; if (/RDV|RENDEZ|MEETING|B2B/.test(n)) return 'rdv'; if (/AJOUT/.test(n)) return 'ajout'; return 'visite'; };
+  const days = []; const dayKey = (label, d) => { const iso = isoOf(d); let f = days.find(x => (iso && x.iso === iso) || (!iso && norm(x.label) === norm(label))); if (!f) { const base = label ? slug(label).slice(0, 3) : (d ? 'j' + (days.length + 1) : 'j1'); let key = base, n = 2; while (days.find(x => x.key === key)) key = base + n++; f = { key, label: label || (d ? d.toLocaleDateString('fr-CA', { weekday: 'long' }) : 'Jour ' + (days.length + 1)), date: fmtDay(d), iso }; f.label = f.label.charAt(0).toUpperCase() + f.label.slice(1); days.push(f); } return f.key; };
+  const items = [], reserve = []; let order = 0;
+  for (const r of rows) {
+    const company = H(r, 'Entreprise', 'Société', 'Company', 'Exposant', 'Organisation', 'Nom'); if (!company) continue;
+    const kind = kindOf(H(r, 'Type', 'Kind')); const stand = H(r, 'Stand', 'Booth'); const d = excelDate(H(r, 'Date')); const dayLabel = H(r, 'Jour', 'Day');
+    const base = { company, stand, hall: H(r, 'Pavillon', 'Hall') || (stand.includes('/') ? stand.split('/')[0].trim() : ''), country: H(r, 'Pays', 'Country'), priority: H(r, 'Priorité', 'Priorite', 'Priority').replace(/^P/i, ''), objective: H(r, 'Objectif', 'Objectifs', 'Objective'), what: H(r, 'Activité', 'Activite', 'Produits', 'Activity', 'Quoi'), angle: H(r, 'Angle', 'Pourquoi', 'Approche') };
+    if (kind === 'reserve') { reserve.push(Object.assign({ id: 'res-' + slug(company), when: H(r, 'Quand', 'When', 'Heure', 'Jour') }, base)); continue; }
+    order++;
+    const day = kind === 'delegation' ? '' : ((dayLabel || d) ? dayKey(dayLabel, d) : '');
+    items.push(Object.assign(base, { id: (day || kind) + '-' + String(order).padStart(2, '0') + '-' + slug(company), kind, day, order, time: kind === 'delegation' ? H(r, 'Heure', 'Quand', 'Time') : timeStr(H(r, 'Heure', 'Time')), contactPlanned: H(r, 'Personne', 'Contact', 'Person'), duration: H(r, 'Durée', 'Duree', 'Duration'), notes0: H(r, 'Notes', 'Note') }));
+  }
+  if (!days.length) items.filter(i => i.kind !== 'delegation').forEach(i => { i.day = 'j1'; }), days.push({ key: 'j1', label: 'Jour 1', date: '', iso: '' });
+  const show = { name: '', place: '', days };
+  if (showRows && showRows.length) { const r = showRows[0]; show.name = H(r, 'Nom', 'Salon', 'Name'); show.place = H(r, 'Lieu', 'Ville', 'Place'); }
+  return { show, items, reserve };
+}
+async function parsePlanFile(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.json')) { const data = JSON.parse(await file.text()); if (!data.items) throw new Error('format'); return { show: data.show || null, items: data.items, reserve: data.reserve || [], isBackup: !!(data.contacts || data.photos), raw: data }; }
+  if (!window.XLSX) throw new Error('Module Excel non chargé');
+  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+  const sheet = n => { const k = wb.SheetNames.find(s => norm(s) === norm(n)); return k ? XLSX.utils.sheet_to_json(wb.Sheets[k], { defval: '' }) : null; };
+  const rows = sheet('Plan') || XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+  const p = rowsToPlan(rows, sheet('Salon'));
+  if (!p.show.name) p.show.name = file.name.replace(/\.[^.]+$/, '');
+  return Object.assign(p, { isBackup: false });
+}
+async function importPlan(file) {
+  try {
+    const p = await parsePlanFile(file);
+    if (p.isBackup) { if (!confirm2('Ce fichier est une sauvegarde complète. La restaurer (remplace tout) ?')) return; await restoreBackup(p.raw); return; }
+    await loadCatalogue();
+    const link = o => { if (o.exhibitorId || !S.catIndex || !S.catIndex.length) return; const n = norm(o.company); if (n.length < 4) return; const hit = S.catIndex.find(x => x.n === n) || S.catIndex.find(x => n.length >= 8 && (x.n === n || x.n.startsWith(n + ' ') || n.startsWith(x.n + ' '))); if (hit) { o.exhibitorId = hit.e.id; if (!o.stand) o.stand = hit.e.s; if (!o.hall) o.hall = hit.e.h; if (!o.country) o.country = hit.e.c; } };
+    p.items.forEach(link); p.reserve.forEach(link);
+    const existing = new Map(S.items.map(i => [i.id, i]));
+    const toAdd = p.items.filter(i => !existing.has(i.id)).length, toUpd = p.items.length - toAdd;
+    if (!confirm2(`Importer ${p.items.length} fiches (${toAdd} nouvelles, ${toUpd} mises à jour) et ${p.reserve.length} exposants en réserve${p.show && p.show.name ? ' pour « ' + p.show.name + ' »' : ''} ?`)) return;
+    for (const src of p.items) { const old = existing.get(src.id); if (old) { for (const k of ['day', 'order', 'time', 'stand', 'hall', 'company', 'country', 'contactPlanned', 'what', 'objective', 'priority', 'angle', 'duration', 'exhibitorId']) if (src[k] !== undefined) old[k] = src[k]; old.updatedAt = nowIso(); await dbPut('items', old); } else { const it = newItem(Object.assign({}, src, { status: src.status || 'todo', notes: src.notes || src.notes0 || '' })); delete it.notes0; await dbPut('items', it); } }
+    if (p.reserve.length) { const cur = new Map(S.reserve.map(r => [r.id, r])); for (const r of p.reserve) cur.set(r.id, Object.assign(cur.get(r.id) || {}, r)); await dbPut('meta', { k: 'reserve', value: Array.from(cur.values()) }); }
+    if (p.show && p.show.days && p.show.days.length) await dbPut('meta', { k: 'show', value: Object.assign({}, S.show, p.show, { name: p.show.name || S.show.name }) });
+    await dbPut('meta', { k: 'seed', version: 2, at: nowIso() });
+    await loadShow(); await loadAll(); S.day = todayKey() || firstDay(); setting('day', S.day);
+    toast('Plan importé'); go('plan/' + S.day); route();
+  } catch (e) { console.error(e); toast('Fichier de plan invalide : ' + (e.message || e), 3500); }
+}
+async function importCatalogue(file) {
+  try {
+    if (!window.XLSX) throw new Error('Module Excel non chargé');
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    const ex = rows.map((r, i) => { const n = H(r, 'Entreprise', 'Exposant', 'Company', 'Nom', 'Name'); if (!n) return null; const s = H(r, 'Stand', 'Booth'); return { id: 'c' + (i + 1) + '-' + slug(n).slice(0, 30), n, s, h: H(r, 'Pavillon', 'Hall') || (s.includes('/') ? s.split('/')[0].trim() : ''), c: H(r, 'Pays', 'Country'), k: 'profile', sec: H(r, 'Secteurs', 'Secteur', 'Sectors') ? H(r, 'Secteurs', 'Secteur', 'Sectors').split(/[;|]/).map(x => x.trim()).filter(Boolean) : [], ps: H(r, 'Produits', 'Produits et services', 'Products', 'Activité'), b: '' }; }).filter(Boolean);
+    if (!ex.length) throw new Error('aucune ligne avec une colonne Entreprise');
+    if (!confirm2(`Importer un catalogue de ${ex.length} exposants ? Il remplace le catalogue actuel sur cet appareil.`)) return;
+    await dbPut('meta', { k: 'catalogue', value: { sectors: {}, exhibitors: ex } }); S.cat = null; await loadCatalogue();
+    toast('Catalogue importé'); route();
+  } catch (e) { console.error(e); toast('Catalogue invalide : ' + (e.message || e), 3500); }
+}
+async function restoreBackup(data) {
+  for (const s of ['items', 'contacts', 'photos']) await dbClear(s);
+  for (const it of data.items) await dbPut('items', it);
+  for (const c of data.contacts || []) await dbPut('contacts', c);
+  for (const p of data.photos || []) { const bin = atob(p.data); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); await dbPut('photos', { id: p.id, type: p.type, data: arr.buffer, createdAt: p.createdAt }); }
+  if (data.show) await dbPut('meta', { k: 'show', value: data.show });
+  if (data.reserve) await dbPut('meta', { k: 'reserve', value: data.reserve });
+  await dbPut('meta', { k: 'seed', version: data.version || 1, at: nowIso() });
+  S.urls.clear(); await loadShow(); await loadAll(); toast('Sauvegarde restaurée'); go('plan/' + S.day); route();
+}
+function exportTemplate() {
+  if (!window.XLSX) { toast('Module Excel non chargé'); return; }
+  const wb = XLSX.utils.book_new();
+  const plan = [
+    { Jour: 'Mardi', Date: '2026-11-03', Heure: '10:15', Stand: 'B1/104', Entreprise: 'Exemple Impianti SRL', Pays: 'Italie', Type: 'RDV', Priorité: '1', Objectif: 'A', Activité: 'Lignes de lavage de plastiques', Angle: 'Présence au Canada ? Ouvert à un fixe ?', Personne: 'Paolo Rossi', Durée: '20 min', Notes: '' },
+    { Jour: 'Mardi', Date: '2026-11-03', Heure: '11:40', Stand: 'D7/408', Entreprise: 'Exemple Filtri SRL', Pays: 'Italie', Type: 'Visite', Priorité: '2', Objectif: 'A, B', Activité: 'Filtres-presses', Angle: 'Stand voisin du RDV précédent', Personne: '', Durée: '15 min', Notes: '' },
+    { Jour: '', Date: '', Heure: 'Mardi soir', Stand: '', Entreprise: 'Exemple Recyclage inc.', Pays: 'Canada', Type: 'Délégation', Priorité: '1', Objectif: '', Activité: 'Centre de tri', Angle: 'Boris présente', Personne: 'Marie Tremblay', Durée: '', Notes: '' },
+    { Jour: '', Date: '', Heure: '', Stand: 'A1/403', Entreprise: 'Exemple Ambiente SRL', Pays: 'Italie', Type: 'Réserve', Priorité: '1', Objectif: 'A', Activité: 'Dépollution des sols', Angle: 'Si trou mardi midi', Personne: '', Durée: '', Notes: '' },
+  ];
+  const ws = XLSX.utils.json_to_sheet(plan); ws['!cols'] = [10, 12, 10, 12, 30, 10, 12, 9, 10, 36, 40, 20, 9, 30].map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, 'Plan');
+  const ws2 = XLSX.utils.json_to_sheet([{ Nom: 'Ecomondo 2026', Lieu: 'Rimini' }]); ws2['!cols'] = [{ wch: 30 }, { wch: 20 }]; XLSX.utils.book_append_sheet(wb, ws2, 'Salon');
+  const ws3 = XLSX.utils.json_to_sheet([{ Entreprise: 'Exemple Impianti SRL', Stand: 'B1/104', Pays: 'Italie', Produits: 'Lignes de lavage', Secteurs: 'Recyclage; Traitement des déchets' }]); ws3['!cols'] = [30, 12, 10, 40, 40].map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws3, 'Catalogue');
+  const ws4 = XLSX.utils.aoa_to_sheet([['Feuille Plan : une ligne par stand ou personne.'], ['Type : RDV, Visite, Délégation ou Réserve. Les lignes Réserve n’ont pas de jour; elles alimentent l’onglet Exposants.'], ['Jour : texte libre (Mardi, Jour 1…). Date : AAAA-MM-JJ, sert à ouvrir le bon jour automatiquement.'], ['Feuille Salon : nom et lieu. Feuille Catalogue (facultative, à importer séparément) : liste complète des exposants pour la recherche et le rapprochement des cartes.']]); ws4['!cols'] = [{ wch: 110 }]; XLSX.utils.book_append_sheet(wb, ws4, 'Mode d’emploi');
+  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  deliver(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'Modele-plan-salon.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+$('#planIn').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importPlan(f); });
+$('#catIn').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importCatalogue(f); });
 
 /* ---------- scan de cartes ---------- */
 let scanCtx = null;
@@ -621,7 +732,7 @@ async function exportBackup() {
   try {
     const photos = S.photoCache || await dbAll('photos');
     const enc = photos.map(p => { const u8 = new Uint8Array(p.data); let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return { id: p.id, type: p.type, createdAt: p.createdAt, data: btoa(s) }; });
-    const data = { app: 'ecomondo2026', version: 1, exportedAt: nowIso(), items: S.items, contacts: S.contacts, photos: enc };
+    const data = { app: 'ecomondo2026', version: 2, exportedAt: nowIso(), show: S.show, reserve: S.reserve, items: S.items, contacts: S.contacts, photos: enc };
     await deliver(new Blob([JSON.stringify(data)], { type: 'application/json' }), `Ecomondo-2026-sauvegarde-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`, 'application/json');
   } catch (e) { toast('Échec de la sauvegarde'); console.error(e); }
 }
@@ -646,7 +757,7 @@ window.addEventListener('online', netStatus); window.addEventListener('offline',
 (async function boot() {
   try {
     idb = await openDb();
-    await seedIfNeeded();
+    await loadShow();
     await loadAll();
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     S.ready = true;

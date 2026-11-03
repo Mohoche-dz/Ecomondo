@@ -1,7 +1,7 @@
 /* Ecomondo 2026 — service worker : fonctionnement hors ligne */
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 const CACHE = 'ecomondo-' + VERSION;
-const CORE = ['./', 'index.html', 'app.js', 'styles.css', 'manifest.webmanifest', 'data/seed.json', 'data/catalogue.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'lib/xlsx.full.min.js', 'lib/tesseract.min.js', 'lib/worker.min.js'];
+const CORE = ['./', 'index.html', 'app.js', 'styles.css', 'manifest.webmanifest', 'data/catalogue.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'lib/xlsx.full.min.js', 'lib/tesseract.min.js', 'lib/worker.min.js'];
 const HEAVY = ['lib/core/tesseract-core-simd-lstm.wasm.js', 'lib/lang/eng.traineddata.gz'];
 
 self.addEventListener('install', e => {

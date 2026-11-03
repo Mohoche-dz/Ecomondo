@@ -102,7 +102,9 @@ a{color:var(--primary)}
 .seg button.on.ok{color:var(--ok)}
 .seg button.on.warn{color:var(--accent)}
 .seg button.on.bad{color:var(--danger)}
-.seg.days{margin:0 0 12px}
+.seg.days{margin:0 0 12px;overflow-x:auto;scrollbar-width:none}
+.seg.days::-webkit-scrollbar{display:none}
+.seg.days button{min-width:96px;flex:1 0 auto}
 .seg.days button{height:40px;font-size:15px}
 .seg.days button.on{background:var(--primary);color:var(--primary-ink)}
 
