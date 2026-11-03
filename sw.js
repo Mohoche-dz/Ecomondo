@@ -1,5 +1,5 @@
 /* Ecomondo 2026 — service worker : fonctionnement hors ligne */
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.1.1';
 const CACHE = 'ecomondo-' + VERSION;
 const CORE = ['./', 'index.html', 'app.js', 'styles.css', 'manifest.webmanifest', 'data/catalogue.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'lib/xlsx.full.min.js', 'lib/tesseract.min.js', 'lib/worker.min.js'];
 const HEAVY = ['lib/core/tesseract-core-simd-lstm.wasm.js', 'lib/lang/eng.traineddata.gz'];
@@ -27,7 +27,7 @@ self.addEventListener('fetch', e => {
   if (url.origin !== location.origin) return;
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
-      try { const r = await fetch(req); const c = await caches.open(CACHE); c.put('index.html', r.clone()); return r; }
+      try { const r = await fetch(req); if (!r.ok) throw new Error('HTTP ' + r.status); const c = await caches.open(CACHE); c.put('index.html', r.clone()); return r; }
       catch (err) { return (await caches.match('index.html')) || (await caches.match('./')) || Response.error(); }
     })());
     return;

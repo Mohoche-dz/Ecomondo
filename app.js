@@ -1,7 +1,7 @@
 /* Ecomondo 2026 — carnet de salon. Données sur l'appareil (IndexedDB). */
 (() => {
 'use strict';
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 const DEFAULT_SHOW = { name: 'Ecomondo 2026', place: 'Rimini', days: [{ key: 'mar', label: 'Mardi', date: '3 nov.', iso: '2026-11-03' }, { key: 'mer', label: 'Mercredi', date: '4 nov.', iso: '2026-11-04' }, { key: 'jeu', label: 'Jeudi', date: '5 nov.', iso: '2026-11-05' }] };
 const DAYS = {}, DAY_DATES = {}, DAY_ORDER = {}, DAY_ISO = {};
 function applyShow(show) {
